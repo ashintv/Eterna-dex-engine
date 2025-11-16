@@ -3,6 +3,7 @@ import fastifyWebsocket from "@fastify/websocket";
 import { RedisManager } from "./redisManager.js";
 import { RequestSwapSchema } from "../lib/schema.js";
 import { PrismaClient } from "@prisma/client";
+;
 
 const app = Fastify();
 const redisManager = new RedisManager();
@@ -35,9 +36,9 @@ app.post("/execute-order/", async (request, reply) => {
       return { status: "error", message: "tokenIn and tokenOut cannot be the same"};
     }
     // create a order entry
-    const orderId = prisma.order.create({
+    const orderId = await prisma.orders.create({
       data: {
-        userAddress: order.data.userAddress,
+        orderType: "swap",
         tokenIn: order.data.tokenIn,
         tokenOut: order.data.tokenOut,
         amount: order.data.amount,
@@ -47,7 +48,7 @@ app.post("/execute-order/", async (request, reply) => {
 
     //sense order to engine via redis
     console.log(`Received order execution request:`, order.data);
-    await redisManager.addOrderExecutionJob(order.data, orderId);
+    await redisManager.addOrderExecutionJob(order.data , orderId.id );
     return { status: "order received", orderId };
   } catch (err) {
     console.error("Error processing order execution request:", err);

@@ -51,8 +51,8 @@ class Engine {
       if (job!.attemptsMade < job!.opts.attempts!) return;
 
       // Now retries are fully exhausted → permanent failure
-      await this.prisma.order.update({
-        where: { orderId: job!.data.orderId },
+      await this.prisma.orders.update({
+        where: { id: job!.data.orderId },
         data: { status: "failed" },
       });
 
@@ -67,8 +67,8 @@ class Engine {
   private async ExecuteOrder(orderData: OrderData): Promise<boolean> {
     try {
       console.log("Executing order:", orderData);
-      await this.prisma.order.update({
-        where: { orderId: orderData.orderId },
+      await this.prisma.orders.update({
+        where: { id: orderData.orderId },
         data: { status: "routing" },
       });
 
@@ -80,8 +80,8 @@ class Engine {
       const bestRoute = await this.handler.getBestRoute(orderData.tokenIn, orderData.tokenOut, orderData.amount);
       console.log(`${orderData.orderId} - Selected DEX: ${bestRoute.dex}, price = ${bestRoute.price}`);
 
-      await this.prisma.order.update({
-        where: { orderId: orderData.orderId },
+      await this.prisma.orders.update({
+        where: { id: orderData.orderId },
         data: { status: "building", selectedDex: bestRoute.dex },
       });
       // After processing, publish an update  about order execution start
@@ -92,8 +92,8 @@ class Engine {
       });
       await sleep(3000);
 
-      await this.prisma.order.update({
-        where: { orderId: orderData.orderId },
+      await this.prisma.orders.update({
+        where: { id: orderData.orderId },
         data: { status: "submitted" },
       });
 
@@ -109,8 +109,8 @@ class Engine {
         tokenOut: orderData.tokenOut,
         amount: orderData.amount,
       });
-      await this.prisma.order.update({
-        where: { orderId: orderData.orderId },
+      await this.prisma.orders.update({
+        where: { id: orderData.orderId },
         data: { status: "confirmed", txHash: result.txHash, executedPrice: result.executedPrice },
       });
       await this.publishOrderUpdate({
@@ -138,3 +138,8 @@ class Engine {
     }
   }
 }
+
+// Start the engine
+new Engine();
+
+
