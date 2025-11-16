@@ -65,6 +65,7 @@ class Engine {
   }
 
   private async ExecuteOrder(orderData: OrderData): Promise<boolean> {
+    sleep(3000)
     try {
       console.log("Executing order:", orderData);
       await this.prisma.orders.update({

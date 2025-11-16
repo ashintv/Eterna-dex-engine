@@ -1,6 +1,7 @@
 import { Queue, Worker } from "bullmq";
 import { Redis } from "ioredis";
 import { CONFIG } from "../config/config.js";
+import type { OrderData } from "../lib/types.js";
 
 const connection = {
   host: CONFIG.redis.host,
@@ -21,14 +22,12 @@ export class RedisManager {
     this.SendUpdateToClients();
   }
 
-  async addOrderExecutionJob(orderData: any , orderId: string): Promise<string> {
+  async addOrderExecutionJob(orderData: OrderData,): Promise<void> {
     try {
       await this.queue.add("execute_order", orderData);
-      this.OrderMap.set(orderId, { status: "pending", clients: new Set() });
-      return orderId;
+      this.OrderMap.set(orderData.orderId, { status: "pending", clients: new Set() });
     } catch (err) {
       console.error("Error adding job to queue:", err);
-      return "";
     }
   }
 
@@ -53,7 +52,7 @@ export class RedisManager {
             const clients = this.OrderMap.get(data.orderId)?.clients;
             if (clients) {
               clients.forEach((client) => {
-                client.socket.send(JSON.stringify(data));
+                client.send(JSON.stringify(data));
               });
             }
           });

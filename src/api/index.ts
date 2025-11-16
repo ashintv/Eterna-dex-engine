@@ -1,29 +1,28 @@
 import Fastify from "fastify";
-import fastifyWebsocket from "@fastify/websocket";
+import websocket from "@fastify/websocket";
 import { RedisManager } from "./redisManager.js";
 import { RequestSwapSchema } from "../lib/schema.js";
 import { PrismaClient } from "@prisma/client";
-;
 
-const app = Fastify();
+
+const app = Fastify({logger: true});
+await app.register(websocket);
 const redisManager = new RedisManager();
 const prisma = new PrismaClient();
-app.get("/docs", async (request, reply) => {
-  return { hello: "world" };
-});
+
 
 app.get("/ws/:orderId", { websocket: true }, (connection, req) => {
-  const orderId = (req.params as { orderId: string }).orderId;
+  const {orderId} = req.params as { orderId: string };
   console.log(`WebSocket connection established for order ${orderId}`);
+  connection.send(`Connected to order ${orderId} updates`);
   redisManager.SubscribeToOrderUpdates(orderId, connection);
-
-  connection.socket.on("close", () => {
+  connection.on("close", () => {
     console.log(`WebSocket connection closed for order ${orderId}`);
     redisManager.UnsubscribeFromOrderUpdates(orderId, connection);
   });
 });
 
-app.post("/execute-order/", async (request, reply) => {
+app.post("/execute-order", async (request, reply) => {
   try {
     //validate order data
     const order = RequestSwapSchema.safeParse(request.body);
@@ -48,8 +47,14 @@ app.post("/execute-order/", async (request, reply) => {
 
     //sense order to engine via redis
     console.log(`Received order execution request:`, order.data);
-    await redisManager.addOrderExecutionJob(order.data , orderId.id );
-    return { status: "order received", orderId };
+    const Neworder = {
+      orderId: orderId.id,
+      tokenIn: order.data.tokenIn,
+      tokenOut: order.data.tokenOut,
+      amount: order.data.amount,
+    }
+    await redisManager.addOrderExecutionJob(Neworder);
+    return { status: "order received", orderId: orderId.id };
   } catch (err) {
     console.error("Error processing order execution request:", err);
     reply.status(500);
@@ -64,3 +69,8 @@ app.listen({ port: 3000, host: "0.0.0.0" }, (err, address) => {
   console.log(`API Documentation at http://localhost:3000/`);
   console.log("PostgreSQL and Redis storage enabled");
 });
+
+app.after(() => {
+  console.log("Fastify server is ready to accept requests.");
+  console.log(app.printRoutes());
+})
