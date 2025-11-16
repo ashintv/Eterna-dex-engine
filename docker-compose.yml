@@ -1,6 +1,16 @@
 services:
   redis:
     image: "redis:latest"
-    container_name: "redis"
+    container_name: "redis-eterna"
     ports:
       - "6379:6379"
+
+  prisma-db:
+    image: "postgres:latest"
+    container_name: "postgress-orderhistory"
+    environment:
+      POSTGRES_USER: "user"
+      POSTGRES_PASSWORD: "password"
+      POSTGRES_DB: "eterna"
+    ports:
+      - "5432:5432"
