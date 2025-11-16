@@ -1,10 +1,12 @@
 import Fastify from "fastify";
 import fastifyWebsocket from "@fastify/websocket";
 import { RedisManager } from "./redisManager.js";
+import { RequestSwapSchema } from "../lib/schema.js";
+import { PrismaClient } from "@prisma/client";
 
 const app = Fastify();
 const redisManager = new RedisManager();
-
+const prisma = new PrismaClient();
 app.get("/docs", async (request, reply) => {
   return { hello: "world" };
 });
@@ -20,18 +22,38 @@ app.get("/ws/:orderId", { websocket: true }, (connection, req) => {
   });
 });
 
-app.post("/execute-order", async (request, reply) => {
-  //TODO: Validate and process order data
-  const order = request.body as { orderId: string; details: any };
-  console.log(`Received order execution request:`, order);
-  const orderId = await redisManager.addOrderExecutionJob(order);
-  if (!orderId) {
-    reply.status(500);
-    return { status: "error", message: "Failed to add order to execution queue" };
-  }
+app.post("/execute-order/", async (request, reply) => {
+  try {
+    //validate order data
+    const order = RequestSwapSchema.safeParse(request.body);
+    if (!order.success) {
+      reply.status(400);
+      return { status: "error", message: "Invalid order data", errors: order.error};
+    }
+    if ( order.data.tokenIn === order.data.tokenOut ) {
+      reply.status(400);
+      return { status: "error", message: "tokenIn and tokenOut cannot be the same"};
+    }
+    // create a order entry
+    const orderId = prisma.order.create({
+      data: {
+        userAddress: order.data.userAddress,
+        tokenIn: order.data.tokenIn,
+        tokenOut: order.data.tokenOut,
+        amount: order.data.amount,
+        status: "pending",
+      },
+    });
 
-  // Here you would add logic to process the order and store it in PostgreSQL and Redis
-  return { status: "order received", orderId };
+    //sense order to engine via redis
+    console.log(`Received order execution request:`, order.data);
+    await redisManager.addOrderExecutionJob(order.data, orderId);
+    return { status: "order received", orderId };
+  } catch (err) {
+    console.error("Error processing order execution request:", err);
+    reply.status(500);
+    return { status: "error", message: "Internal server error" };
+  }
 });
 
 app.listen({ port: 3000, host: "0.0.0.0" }, (err, address) => {

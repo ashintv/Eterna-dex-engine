@@ -30,8 +30,12 @@ class Engine {
       CONFIG.ORDER_QUEUE,
       async (job) => {
         // Process the order execution job
-        console.log("Processing order execution job:", job.data);
-        await this.ExecuteOrder(job.data);
+        console.log("Processing order execution job:", job.data, "Attempt:", job.attemptsMade + 1);
+
+        const result = await this.ExecuteOrder(job.data);
+        if (!result) {
+          throw new Error("Order execution failed");
+        }
       },
       { connection: this.connection }
     );
@@ -40,12 +44,27 @@ class Engine {
       console.log(`Job with id ${job.id} has been completed`);
     });
 
-    worker.on("failed", (job, err) => {
-      console.error(`Job with id ${job?.id} has failed with error: ${err.message}`);
+    worker.on("failed", async (job, err) => {
+      console.error(`Job ${job?.id} failed attempt ${job?.attemptsMade}: ${err.message}`);
+
+      // Retry not exhausted → do nothing
+      if (job!.attemptsMade < job!.opts.attempts!) return;
+
+      // Now retries are fully exhausted → permanent failure
+      await this.prisma.order.update({
+        where: { orderId: job!.data.orderId },
+        data: { status: "failed" },
+      });
+
+      await this.publishOrderUpdate({
+        orderId: job!.data.orderId,
+        status: "failed",
+        message: "Order permanently failed after retries",
+      });
     });
   }
 
-  private async ExecuteOrder(orderData: OrderData) {
+  private async ExecuteOrder(orderData: OrderData): Promise<boolean> {
     try {
       console.log("Executing order:", orderData);
       await this.prisma.order.update({
@@ -90,27 +109,25 @@ class Engine {
         tokenOut: orderData.tokenOut,
         amount: orderData.amount,
       });
-
       await this.prisma.order.update({
         where: { orderId: orderData.orderId },
-        data: { status: "confirmed" , txHash: result.txHash , executedPrice: result.executedPrice },
+        data: { status: "confirmed", txHash: result.txHash, executedPrice: result.executedPrice },
       });
       await this.publishOrderUpdate({
         orderId: orderData.orderId,
         status: "confirmed",
         message: "transaction successfull",
       });
+      return true;
     } catch (err) {
       console.error("Error executing order:", err);
-      await this.prisma.order.update({
-        where: { orderId: orderData.orderId },
-        data: { status: "failed" },
-      });
       await this.publishOrderUpdate({
         orderId: orderData.orderId,
         status: "failed",
         message: `order execution failed:`,
+        error: (err as Error).message,
       });
+      return false;
     }
   }
   private async publishOrderUpdate(updateData: any) {

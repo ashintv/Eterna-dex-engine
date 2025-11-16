@@ -14,12 +14,15 @@ export class RedisManager {
   private OrderMap: Map<string, { status: string; clients: Set<any> }> = new Map();
 
   constructor() {
-    this.queue = new Queue(CONFIG.ORDER_QUEUE, { connection });
+    this.queue = new Queue(CONFIG.ORDER_QUEUE, { connection , defaultJobOptions: {
+      attempts: CONFIG.MAX_RETRY,
+      backoff: CONFIG.BACK_OFF,
+    } });
+    this.SendUpdateToClients();
   }
 
-  async addOrderExecutionJob(orderData: any): Promise<string> {
+  async addOrderExecutionJob(orderData: any , orderId: string): Promise<string> {
     try {
-      const orderId = crypto.randomUUID();
       await this.queue.add("execute_order", orderData);
       this.OrderMap.set(orderId, { status: "pending", clients: new Set() });
       return orderId;
