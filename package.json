@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
     "dev:api": "tsc -b && node ./dist/api/index.js",
     "dev:engine": "tsc -b && node ./dist/engine/engine.js",
     "up": "docker-compose up",
@@ -17,13 +17,21 @@
   "dependencies": {
     "@fastify/websocket": "^11.2.0",
     "@prisma/client": "^6.19.0",
+    "axios": "^1.13.2",
     "bullmq": "^5.63.1",
     "fastify": "^5.6.2",
     "ioredis": "^5.8.2",
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
-    "prisma": "^6.19.0"
+    "@types/supertest": "^6.0.3",
+    "@types/ws": "^8.18.1",
+    "jest": "^30.2.0",
+    "prisma": "^6.19.0",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.5",
+    "ws": "^8.18.3"
   }
 }
